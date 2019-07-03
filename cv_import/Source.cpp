@@ -135,9 +135,44 @@ Status ReadTensorFromMat(const string& file_name, const float input_mean,
 
 }
 
+Status LoadGraph(const string& graph_file_name,
+	std::unique_ptr<tensorflow::Session>* session) {
+	tensorflow::GraphDef graph_def;
+	Status load_graph_status =
+		ReadBinaryProto(tensorflow::Env::Default(), graph_file_name, &graph_def);
+	if (!load_graph_status.ok()) {
+		return tensorflow::errors::NotFound("Failed to load compute graph at '",
+			graph_file_name, "'");
+	}
+	if (!graph_def.node_size()>0) {
+		return tensorflow::errors::NotFound("Your graph :'",
+			graph_file_name, "' has no node. Plese create freeze graph.");
+	}
 
-int main() {
+	session->reset(tensorflow::NewSession(tensorflow::SessionOptions()));
+	Status session_create_status = (*session)->Create(graph_def);
+	if (!session_create_status.ok()) {
+		return session_create_status;
+	}
+	return Status::OK();
+}
+
+
+
+int main(int argc, char* argv[]) {
+	tensorflow::port::InitMain(argv[0], &argc, &argv);
+
 	string root_dir = "";
+	string graph = "C:/Users/kouji/Desktop/ssd_import/export/trained_graph.pb";
+
+	std::unique_ptr<tensorflow::Session> session;
+	string graph_path = tensorflow::io::JoinPath(root_dir, graph);
+	Status load_graph_status = LoadGraph(graph_path, &session);
+	if (!load_graph_status.ok()) {
+		LOG(ERROR) << load_graph_status;
+		return -1;
+	}
+
 	string image = "C:/Users/kouji/Desktop/ssd_import/SSD-Tensorflow/demo/dog.jpg";
 	std::vector<Tensor> resized_tensors;
 	string image_path = tensorflow::io::JoinPath(root_dir, image);
@@ -146,6 +181,8 @@ int main() {
 	int32 input_height = 768;
 	float input_mean = 0;
 	float input_std = 255;
+	string input_layer = "input";
+	string output_layer = "output";
 
 	Status read_tensor_status =
 		ReadTensorFromImageFile(image_path, input_height, input_width, input_mean,
@@ -154,6 +191,7 @@ int main() {
 		LOG(ERROR) << read_tensor_status;
 		return -1;
 	}
+	const Tensor& resized_tensor = resized_tensors[0];
 
 	std::vector<Tensor> cv_tensors;
 	Status read_cv_status =
@@ -162,4 +200,14 @@ int main() {
 		LOG(ERROR) << read_cv_status;
 		return -1;
 	}
+
+	// Actually run the image through the model.
+	std::vector<Tensor> outputs;
+	Status run_status = session->Run({ { input_layer, resized_tensor } },
+	{ output_layer }, {}, &outputs);
+	if (!run_status.ok()) {
+		LOG(ERROR) << "Running model failed: " << run_status;
+		return -1;
+	}
+
 }
