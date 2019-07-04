@@ -160,6 +160,7 @@ Status LoadGraph(const string& graph_file_name,
 
 
 int main(int argc, char* argv[]) {
+
 	tensorflow::port::InitMain(argv[0], &argc, &argv);
 
 	string root_dir = "";
@@ -204,7 +205,7 @@ int main(int argc, char* argv[]) {
 	// Actually run the image through the model.
 	std::vector<Tensor> outputs;
 	Status run_status = session->Run({ { input_layer, resized_tensor } },
-	{ output_layer }, {}, &outputs);
+										{ output_layer }, {}, &outputs);
 	if (!run_status.ok()) {
 		LOG(ERROR) << "Running model failed: " << run_status;
 		return -1;
